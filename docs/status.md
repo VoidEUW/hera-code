@@ -7,11 +7,22 @@ ADRs.
 **Updated:** 2026-09-06 · **Version:** nothing tagged · **Strategy:** make it work, then make
 it look right, then make it reachable
 
-## Done: v0.1.0 M0 — the workspace
+## Now: v0.1.0 M2 — the tools
 
-M0 is done and merged. **Nothing runs yet** — `hera-code --version` works, and every verb prints
-which milestone it is waiting on and exits `3`. The next thing that produces an answer from a model
-is M1.
+**M1 is done: a turn runs end to end.** `hera-code init` seeds both data directories, `check`
+reports whether they are usable, and `hera-code -p "…"` sends one turn to a configured endpoint and
+prints the answer. There is no terminal yet (M3) and no tools yet (M2), so what it can do is
+*answer*, not *work*.
+
+| | |
+|---|---|
+| `init` | Seeds the shared `~/.hera` — mind, skills, `mcp.json` — and `~/.hera/code`. Idempotent, overwrites nothing |
+| `check` | Looks and reports; creates, changes and repairs nothing. Never contacts the endpoint |
+| `-p "…"` | One turn, plain text, no dock. Exit `0` completed · `1` failed · `4` suspended with nobody to answer |
+| config | `~/.hera/code/config.toml`, mode 600, seeded from hera's endpoints then `HERA_PROVIDER_*`, and the file wins afterwards |
+| the register | A `coding` profile with three traits, and the preamble in `SLOT_PROJECT`. **No mind region is written** |
+
+## Done: v0.1.0 M0 — the workspace
 
 | | |
 |---|---|
@@ -21,7 +32,7 @@ is M1.
 | Meta-tests | ✅ layering · workspace · docs · vendor |
 | ADRs | ✅ 1–10 |
 | Documents | ✅ ARCHITECTURE · tui · tooling · versions · CLAUDE · CONTRIBUTING · README |
-| Checks | ✅ `ruff`, `mypy --strict`, 911 tests at 99 % and every pre-commit hook |
+| Checks | ✅ `ruff`, `mypy --strict`, and every pre-commit hook |
 | CI | ✅ lint · types · structure · test (3.12, 3.13) · terminal |
 | Milestones and issues | ✅ created |
 
@@ -35,7 +46,7 @@ Both had to be written before the code that could violate them.
 
 | Version | State | For |
 |---|---|---|
-| v0.1.0 | M0 done, M1 next | A coding agent that works — see [versions/v0.1.0.md](versions/v0.1.0.md) |
+| v0.1.0 | M1 done, M2 next | A coding agent that works — see [versions/v0.1.0.md](versions/v0.1.0.md) |
 | v0.2.0 | planned | The look, and the memory of a run: the visual pass, shadow tree, graph |
 | v0.3.0 | planned | Reachable: hera drives hera-code, and where code runs |
 
@@ -49,8 +60,8 @@ you can hold a conversation in. Correct beats polished — the visual pass is v0
 | Milestone | Status | What it lands |
 |---|---|---|
 | M0 the workspace | ✅ | skeleton, vendoring, meta-tests, ten ADRs, every document |
-| M1 the spine | ⬜ next | `init` · `check` · config · the `coding` profile · skills seeded · wiring · `-p "…"` · migrations |
-| M2 the tools | ⬜ | `hera_code_mcp` mounted as `code`: files, `bash`, `ask` · `hera_code_workspace` · `AGENT.md`/`CLAUDE.md` · the default policy |
+| M1 the spine | ✅ | `init` · `check` · config · the `coding` profile · skills seeded · wiring · `-p "…"` · migrations |
+| M2 the tools | ⬜ next | `hera_code_mcp` mounted as `code`: files, `bash`, `ask` · `hera_code_workspace` · `AGENT.md`/`CLAUDE.md` · the default policy |
 | M3 the terminal | ⬜ | scrollback + dock, one renderer per event variant, the gutter, both cards, `/slash`, `@file`, `NO_COLOR`, `^C` |
 | M4 the todo list | ⬜ | `TODOS.md`, the three todo tools, the intake conversation, the dock strip |
 | M5 sessions | ⬜ | `--continue` · `--resume` · the picker · compaction |
@@ -86,14 +97,18 @@ is the thing to re-open, not the copy to patch.
 
 ## Known gaps
 
-- **Nothing runs.** Every verb parses and exits `3` naming its milestone. There is no path from a
-  prompt to a model until M1, and none from a model to a working tree until M2.
+- **No tools and no terminal.** A turn can answer but cannot read, write or run anything until
+  M2, and there is no interactive session until M3. `hera-code` with no `-p` says so and exits `3`.
+- **A suspended turn in `-p` mode exits `4` and stops.** The exit code is provisional until #14
+  settles what that should mean, including whether `--yes` exists.
 - **`release.yml` fails deliberately on an application tag.** The tag-and-version check and the
   package path work; the PyInstaller matrix is a job that exits 1 with a pointer to M6. A release
   workflow that silently produced no binaries would be worse.
 - **Nothing verifies the terminal.** The renderer-per-variant snapshot suite arrives with M3, and
   until then `docs/tui.md` is a document with nothing holding it to the code.
-- **`main` is not protected yet.** The rulesets go on after the first push; until then the
-  branch-first rule in `CONTRIBUTING.md` is a convention rather than an enforcement.
-- **No decision yet on what an `ask` outcome means in `-p` mode**, where there is nobody to answer
-  the card. It must not silently become an allow. M2 settles it.
+- **`main` is not protected yet.** The rulesets go on next; until then the branch-first rule in
+  `CONTRIBUTING.md` is a convention rather than an enforcement.
+- **Nothing has been run against a real endpoint.** Every test drives `FakeProvider`, and the
+  suite now *forces* it so no test can reach a network by accident — the default `base_url` is
+  where LM Studio listens, so a test that built its own provider used to talk to a real model on a
+  developer machine and pass for the wrong reason in CI.
