@@ -8,9 +8,11 @@
 
 ---
 
-> **Status: nothing works yet.** The repository skeleton and the design are in place; the first
-> usable milestone is v0.1.0 M1. See [`docs/status.md`](docs/status.md) for exactly where the
-> build stands, and [`docs/versions/v0.1.0.md`](docs/versions/v0.1.0.md) for what is coming.
+> **Status: it runs, and it is not released.** You can hold a conversation in it, and it can read,
+> search, edit and run commands in your working tree with a permission card in front of anything
+> that changes a file. The todo list, the shadow tree and the graph are still ahead — see
+> [`docs/status.md`](docs/status.md) for exactly where the build stands. There is no installer
+> yet; run it from a checkout with `uv run hera-code`.
 
 hera-code is a coding agent in the register Claude Code and Codex CLI occupy: a terminal, a model,
 tools that read and write a working tree, and skills. It is built on the libraries from

@@ -104,13 +104,7 @@ def _run(args: argparse.Namespace) -> int:
         return _check()
     if getattr(args, "prompt", None):
         return _one_shot(str(args.prompt), yes=bool(getattr(args, "yes", False)))
-
-    print(
-        f"hera-code {__version__}: the terminal is not built yet — it lands in v0.1.0 M3. "
-        'Until then, `hera-code -p "…"` runs one turn and prints the answer.',
-        file=sys.stderr,
-    )
-    return NOT_YET
+    return _terminal()
 
 
 def _init() -> int:
@@ -166,6 +160,37 @@ def _one_shot(prompt: str, *, yes: bool = False) -> int:
         # as `RuntimeError: Event loop is closed` on the way out of an otherwise successful turn.
         try:
             return await oneshot.run(services, prompt, root=Path.cwd(), yes=yes)
+        finally:
+            await services.aclose()
+
+    return asyncio.run(go())
+
+
+def _terminal() -> int:
+    """Start the interactive session.
+
+    **Refused when stdout is not a terminal**, rather than degraded. A dock drawn into a pipe is
+    the failure ADR 3 says this design is most exposed to, and there is a better answer to
+    `hera-code < script.txt` than a corrupted transcript: say what to use instead.
+    """
+    if not sys.stdout.isatty():
+        print(
+            'hera-code needs a terminal. For a pipe or a script, use `hera-code -p "…"`, '
+            "which prints one answer as plain text.",
+            file=sys.stderr,
+        )
+        return BAD_USAGE
+
+    from hera_code.tui.app import Terminal
+    from hera_code.tui.theme import detect
+
+    services = _services()
+    _prepare(services)
+    theme = detect(services.config.terminal.appearance)
+
+    async def go() -> int:
+        try:
+            return await Terminal(services, theme).run()
         finally:
             await services.aclose()
 

@@ -16,6 +16,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **A terminal you can hold a conversation in.** The transcript goes into the terminal's own
+  scrollback — your scroll wheel, your selection, and it is still there after you exit — with a
+  pinned dock of todo strip, composer and status line. `⏎` sends, `⇧⏎` is a newline, `^T` expands
+  the todos, `/` opens the commands and `@` completes a path.
+- **Both cards are answerable.** `←→ ⏎` chooses and **`Esc` denies**: the safe answer is the one a
+  mistyped key reaches, and there is no key that allows something by accident.
+- One renderer per `ChatEvent` variant, held to it by a snapshot suite — including that an unknown
+  variant degrades **visibly** rather than vanishing.
+- The ocellus, the four colour meanings, and the 68-column measure, from `docs/tui.md`. `NO_COLOR`,
+  `TERM=dumb`, a non-TTY stdout and `HERA_CODE_MOTION=off` each turn the right things off, and
+  `hera-code` in a pipe is refused with the name of the flag that works.
 - **It can do work.** `hera_code_mcp` — the MCP server hera-code *is* — mounted in-process as
   `code`: `read`, `write`, `edit`, `glob`, `grep`, `bash` and `ask`. Every path goes through one
   containment guard, with symlinks resolved before they are compared.

@@ -12,7 +12,7 @@ conversation with a question and a cancelled answer rather than a conversation w
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
@@ -29,6 +29,7 @@ from hera_chats import (
     Turn,
     TurnContext,
     build_history,
+    events_of,
     title_from,
 )
 from hera_code import context as project_context
@@ -161,3 +162,60 @@ def _working_tree(owner_id: UUID, root: Path | None, instructions: str) -> Proje
     """
     name = root.name if root is not None else "working tree"
     return Project(owner_id=owner_id, slug="working-tree", name=name, instructions=instructions)
+
+
+def resume(
+    session: DbSession,
+    services: Services,
+    chat: Chat,
+    assistant: Message,
+    *,
+    confirmed: Sequence[str] = (),
+    denied: Sequence[str] = (),
+    answers: Mapping[str, str] | None = None,
+    root: Path | None = None,
+) -> Exchange:
+    """Continue a turn a person has just settled.
+
+    **The same assistant message, not a new one.** A suspended turn is the first half of an answer;
+    resuming appends to it, so what a person read before the card and what they read after are one
+    message rather than two that happen to be adjacent.
+
+    The three ways to settle a call arrive on the same footing — allowed, refused, or replied to —
+    and `hera_chats.Turn` decides which are dispatched. A refusal still produces a *result*: the
+    model is told it was not allowed, which is what lets it try something else instead of hanging.
+    """
+    messages = MessageRepository(session)
+    profile = active_profile(session, services.settings.owner_id)
+
+    earlier = events_of(assistant)
+    history = build_history(
+        m for m in messages.for_chat(chat.id) if m.id != assistant.id and m.role != "assistant"
+    )
+
+    workspace = services.workspace if root is None else discover(root)
+    found = instructions(workspace.root, user_file=user_instructions_path())
+    project = project_context.build(workspace=workspace, instructions=found.render())
+
+    turn = services.orchestrator.begin(
+        TurnContext(
+            text="",
+            chat=chat,
+            profile=profile,
+            history=history,
+            # The paused half. `Turn` re-streams none of it -- the person is already looking at
+            # it -- and picks the settled calls back out before the model is asked anything.
+            resume=earlier,
+            confirmed=list(confirmed),
+            denied=list(denied),
+            answers=dict(answers or {}),
+            project=_working_tree(services.settings.owner_id, workspace.root, project.render()),
+        )
+    )
+    # The user message is the one that started the paused turn; nothing new was typed.
+    return Exchange(chat=chat, user=assistant, assistant=assistant, turn=turn)
+
+
+def latest_assistant(session: DbSession, chat: Chat) -> Message | None:
+    """The message a card would be answered into."""
+    return MessageRepository(session).latest_assistant(chat.id)

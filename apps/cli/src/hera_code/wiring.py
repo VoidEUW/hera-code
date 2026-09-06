@@ -162,6 +162,29 @@ class Services:
         """The model name requests are sent with."""
         return self.orchestrator.settings.model
 
+    def always_allow(self, tool: str, reason: str = "") -> None:
+        """Write one rule, because a person said *always*.
+
+        **Not persisted yet** — the rule lives for this session. Writing it to disk needs a file
+        for a person's own rules to live in, and inventing one here would be inventing a format
+        that `check` cannot report on and nothing can edit. That is v0.2.0, and the terminal says
+        *always allowing* rather than *always allowed* until then, because the two are different
+        promises.
+        """
+        if self.registry is None:
+            return
+        rule = Rule(
+            pattern=tool,
+            decision=Decision.ALLOW,
+            reason=reason or "you allowed this",
+        )
+        widened = Policy(
+            base=PermissionSet(rules=[*self.registry.policy.base.rules, rule]),
+            fallback=self.registry.policy.fallback,
+        )
+        self.registry = self.registry.with_policy(widened)
+        self.orchestrator.registry = self.registry
+
     def allow_what_would_be_asked(self) -> None:
         """Apply `--yes` — see :func:`said_yes_in_advance` for the line it must not cross.
 

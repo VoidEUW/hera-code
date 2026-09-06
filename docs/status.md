@@ -7,19 +7,30 @@ ADRs.
 **Updated:** 2026-09-06 · **Version:** nothing tagged · **Strategy:** make it work, then make
 it look right, then make it reachable
 
-## Now: v0.1.0 M3 — the terminal
+## Now: v0.1.0 M4 — the todo list
 
-**M2 is done: it can do work.** `hera_code_mcp` is mounted as `code`, so a turn can read, search,
-write, edit and run commands inside the working tree — and `AGENT.md`/`AGENTS.md`/`CLAUDE.md` reach
-the prompt. What is missing is the interactive part: a permission card cannot be *drawn* yet, so
-anything that changes a file suspends the turn until M3, or runs under `--yes`.
+**M3 is done: `hera-code` is a terminal you can hold a conversation in.** Type, watch it work,
+answer the card when it wants to change something, carry on. The whole loop runs.
 
 | | |
 |---|---|
-| Tools | `read` · `write` · `edit` · `glob` · `grep` · `bash` · `ask`, namespaced `code__` |
-| The guard | One containment check, `Workspace.resolve`, symlinks resolved before comparing |
-| The policy | [ADR 11](adr/0011-the-default-policy-and-what-ask-means-with-nobody-there.md): reads allow, changes ask, outside the tree deny — and `--yes` cannot reach a deny |
-| Instructions | All three filenames, read **every turn** so a mid-session edit is followed |
+| The transcript | Real scrollback — your scroll wheel, your selection, still there after you exit |
+| The dock | Pinned: todo strip · composer · status line. `^T` expands, and the keys change while a turn runs |
+| The gutter | One row per call, keyed on the id, with **why** a skill was selected |
+| The cards | Both answerable. `←→ ⏎`, and **`Esc` denies** — no key allows anything by accident |
+| Rendering | One renderer per event variant; an unknown one degrades **visibly** |
+| Off switches | `NO_COLOR`, `TERM=dumb`, `HERA_CODE_MOTION=off`, and a pipe is refused with the flag that works |
+
+**What M3 deferred, on purpose** (v0.2.0 M1): the ocellus beat animation, collapsed-block tails,
+the diff renderer, the syntax palette, the `^K` overlays. `docs/versions/v0.1.0.md` names them.
+
+## Done: v0.1.0 M2 — the tools
+
+`hera_code_mcp` mounted as `code`; `read` · `write` · `edit` · `glob` · `grep` · `bash` · `ask`.
+One containment check with symlinks resolved before comparing, and
+[ADR 11](adr/0011-the-default-policy-and-what-ask-means-with-nobody-there.md) deciding what runs
+without a card. `AGENT.md`/`AGENTS.md`/`CLAUDE.md` all read, **every turn**, so a mid-session edit
+is followed.
 
 ## Done: v0.1.0 M1 — the spine
 
@@ -60,7 +71,7 @@ Both had to be written before the code that could violate them.
 
 | Version | State | For |
 |---|---|---|
-| v0.1.0 | M2 done, M3 next | A coding agent that works — see [versions/v0.1.0.md](versions/v0.1.0.md) |
+| v0.1.0 | M3 done, M4 next | A coding agent that works — see [versions/v0.1.0.md](versions/v0.1.0.md) |
 | v0.2.0 | planned | The look, and the memory of a run: the visual pass, shadow tree, graph |
 | v0.3.0 | planned | Reachable: hera drives hera-code, and where code runs |
 
@@ -76,8 +87,8 @@ you can hold a conversation in. Correct beats polished — the visual pass is v0
 | M0 the workspace | ✅ | skeleton, vendoring, meta-tests, ten ADRs, every document |
 | M1 the spine | ✅ | `init` · `check` · config · the `coding` profile · skills seeded · wiring · `-p "…"` · migrations |
 | M2 the tools | ✅ | `hera_code_mcp` mounted as `code`: files, `bash`, `ask` · `hera_code_workspace` · `AGENT.md`/`CLAUDE.md` · the default policy |
-| M3 the terminal | ⬜ next | scrollback + dock, one renderer per event variant, the gutter, both cards, `/slash`, `@file`, `NO_COLOR`, `^C` |
-| M4 the todo list | ⬜ | `TODOS.md`, the three todo tools, the intake conversation, the dock strip |
+| M3 the terminal | ✅ | scrollback + dock, one renderer per event variant, the gutter, both cards, `/slash`, `@file`, `NO_COLOR`, `^C` |
+| M4 the todo list | ⬜ next | `TODOS.md`, the three todo tools, the intake conversation, the dock strip |
 | M5 sessions | ⬜ | `--continue` · `--resume` · the picker · compaction |
 | M6 the release | ⬜ | five binaries, `install.sh`, `install.ps1` |
 
@@ -112,9 +123,11 @@ is the thing to re-open, not the copy to patch.
 
 ## Known gaps
 
-- **No terminal.** `hera-code` with no `-p` says so and exits `3`. Until M3 there is no way to
-  *answer* a permission card, so anything that changes a file either suspends the turn or needs
-  `--yes`.
+- **No todo list.** The dock's strip says *no plan yet* and means it — M4.
+- **`Always allow` does not persist.** It widens the policy for the session and the terminal says
+  *always allowing* rather than *always allowed*, because the two are different promises. A file
+  for a person's own rules is v0.2.0; inventing one now would be inventing a format `check` cannot
+  report on.
 - **No sandbox.** `bash` runs with the person's own environment and permissions; the card is the
   only thing between a model and the machine. v0.3.0, and `docs/tooling.md` § 5 records the cost.
 - **`.gitignore` is not parsed.** `Workspace.walk` takes glob patterns and a fixed ignore list; a
