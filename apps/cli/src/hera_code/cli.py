@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -45,6 +46,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Entry point. Returns a status code rather than calling ``sys.exit``, so it is testable."""
     parser = _parser()
     args = parser.parse_args(argv)
+    _quieten(verbose=bool(getattr(args, "verbose", False)))
     try:
         return _run(args)
     except _Reportable as exc:
@@ -57,6 +59,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="hera-code", description="A terminal coding agent.")
     parser.add_argument("--version", action="version", version=f"hera-code {__version__}")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="show the library logging that is normally hidden",
+    )
     _session_options(parser)
 
     commands = parser.add_subparsers(dest="command")
@@ -76,6 +83,12 @@ def _session_options(parser: argparse.ArgumentParser) -> None:
         help="run one turn, print the answer, exit — no terminal",
     )
     parser.add_argument(
+        "--yes",
+        dest="yes",
+        action="store_true",
+        help="allow the calls that would have asked. Cannot reach what is denied outright",
+    )
+    parser.add_argument(
         "--continue", dest="resume_last", action="store_true", help="resume the last session"
     )
     parser.add_argument(
@@ -90,7 +103,7 @@ def _run(args: argparse.Namespace) -> int:
     if command == "check":
         return _check()
     if getattr(args, "prompt", None):
-        return _one_shot(str(args.prompt))
+        return _one_shot(str(args.prompt), yes=bool(getattr(args, "yes", False)))
 
     print(
         f"hera-code {__version__}: the terminal is not built yet — it lands in v0.1.0 M3. "
@@ -139,7 +152,7 @@ def _check() -> int:
     return FAILED
 
 
-def _one_shot(prompt: str) -> int:
+def _one_shot(prompt: str, *, yes: bool = False) -> int:
     from hera_code import oneshot
 
     services = _services()
@@ -152,7 +165,7 @@ def _one_shot(prompt: str) -> int:
         # client whose transport belongs to the loop that has already been closed, which surfaces
         # as `RuntimeError: Event loop is closed` on the way out of an otherwise successful turn.
         try:
-            return await oneshot.run(services, prompt, root=Path.cwd())
+            return await oneshot.run(services, prompt, root=Path.cwd(), yes=yes)
         finally:
             await services.aclose()
 
@@ -188,6 +201,35 @@ def _prepare(services: Services) -> Prepared:
         )
     except DatabaseAhead as exc:
         raise _Reportable(str(exc)) from exc
+
+
+NOISY_LOGGERS = ("alembic", "sqlalchemy", "httpx", "httpcore", "mcp")
+"""Libraries whose INFO output is not addressed to a person using hera-code.
+
+**Alembic is the one that made this necessary.** It logs a line per autogenerate plugin at INFO,
+so the first thing anybody saw on a fresh install was fourteen lines about
+`alembic.autogenerate.schemas` before `created ~/.hera/mind`. hera can afford that because it
+logs to a server's stderr; a terminal cannot, and neither can a pipe.
+
+Quietened rather than disabled: `--verbose` puts them back, because somebody debugging a
+migration wants exactly these lines.
+"""
+
+
+def _quieten(*, verbose: bool) -> None:
+    """Set the logging up before anything logs.
+
+    Called from :func:`main` immediately after parsing, which is the last moment before the first
+    import that configures a handler of its own. A library that has already emitted at import
+    time cannot be un-emitted, so the ordering here is the whole of it.
+    """
+    level = logging.DEBUG if verbose else logging.WARNING
+    logging.basicConfig(level=level, format="%(levelname)s %(name)s: %(message)s")
+    # Set either way rather than returning early on `--verbose`. Returning left a logger that an
+    # earlier call had quietened still quiet, so `--verbose` was a no-op in any process that had
+    # already run without it -- which is every test, and would be a REPL or an embedding too.
+    for name in NOISY_LOGGERS:
+        logging.getLogger(name).setLevel(logging.NOTSET if verbose else logging.WARNING)
 
 
 class _Reportable(RuntimeError):

@@ -34,6 +34,8 @@ from hera_chats import (
 from hera_code import context as project_context
 from hera_code.profile import active_profile
 from hera_code.wiring import Services
+from hera_code_home import user_instructions_path
+from hera_code_workspace import discover, instructions
 
 
 @dataclass
@@ -101,7 +103,12 @@ def begin(
     assistant = messages.start_assistant_message(chat, profile_id=profile.id if profile else None)
 
     history = build_history(m for m in messages.for_chat(chat.id) if m.id != user.id)
-    project = project_context.build(root=root)
+
+    workspace = services.workspace if root is None else discover(root)
+    # Read every turn rather than cached at launch: a person who edits CLAUDE.md mid-session
+    # means the next turn to follow it, and that is the same promise the todo list makes.
+    found = instructions(workspace.root, user_file=user_instructions_path())
+    project = project_context.build(workspace=workspace, instructions=found.render())
 
     turn = services.orchestrator.begin(
         TurnContext(
@@ -111,7 +118,7 @@ def begin(
             history=history,
             # Everything about the working tree goes into the project slot -- the seam that keeps
             # every vendored package unedited. See hera_code.context and ADR 5.
-            project=_working_tree(services.settings.owner_id, root, project.render()),
+            project=_working_tree(services.settings.owner_id, workspace.root, project.render()),
         )
     )
     return Exchange(chat=chat, user=user, assistant=assistant, turn=turn)

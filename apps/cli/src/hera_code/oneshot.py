@@ -24,7 +24,7 @@ from pathlib import Path
 from hera_chats import AnswerRequired, PermissionRequired, TurnClosed
 from hera_code import session as sessions
 from hera_code.wiring import Services
-from hera_providers import TextDelta
+from hera_providers import TextDelta, ToolCallReady
 
 COMPLETED = 0
 FAILED = 1
@@ -37,11 +37,19 @@ in the terminal; the second is not.
 """
 
 
-async def run(services: Services, prompt: str, *, root: Path | None = None) -> int:
+async def run(
+    services: Services, prompt: str, *, root: Path | None = None, yes: bool = False
+) -> int:
     """Run one turn against the configured endpoint and print the answer.
+
+    ``yes`` is a person saying yes in advance (ADR 11). It allows what the policy would have
+    **asked** about and cannot reach a **deny**, and every call it permits is named on stderr —
+    a CI log should show what was allowed, not only what ran.
 
     Returns the exit code rather than calling ``sys.exit``, so it is testable.
     """
+    if yes:
+        services.allow_what_would_be_asked()
     with services.database.session() as db:
         chat = sessions.open_session(db, services)
         exchange = sessions.begin(db, services, chat, prompt, root=root)
@@ -58,6 +66,10 @@ async def run(services: Services, prompt: str, *, root: Path | None = None) -> i
                 waiting.append(f"{event.tool} needs permission — {event.reason or 'no rule'}")
             elif isinstance(event, AnswerRequired):
                 waiting.append(f"{event.tool} asked: {event.question}")
+            elif isinstance(event, ToolCallReady) and yes:
+                # Named as it happens rather than summarised at the end: a turn that was killed
+                # half way should still have said what it was allowed to do.
+                print(f"allowed: {event.name}", file=sys.stderr)
             elif isinstance(event, TurnClosed):
                 closed = event
 

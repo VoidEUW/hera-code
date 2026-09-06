@@ -26,6 +26,7 @@ from hera_code.config import CodeConfig, ProviderEntry
 from hera_code.models import ALL_TABLES  # noqa: F401
 from hera_code.settings import CodeSettings
 from hera_code.wiring import DEFAULT_POLICY, Services
+from hera_code_workspace import Workspace
 from hera_home import mind_dir, skills_dir
 from hera_profiles import MindRepository, PromptBuilder
 from hera_skillsets import SkillLibrary, SkillRouter
@@ -92,6 +93,18 @@ def database(settings: CodeSettings) -> Iterator[Database]:
 
 
 @pytest.fixture
+def workspace(tmp_path: Path) -> Workspace:
+    """A working tree of its own, so nothing a test does reaches the repository it runs in.
+
+    A real directory rather than `Path.cwd()`: a tool test that wrote a file would otherwise write
+    it into hera-code's own checkout, and a `grep` would search this repository's source.
+    """
+    root = tmp_path / "tree"
+    root.mkdir()
+    return Workspace(root=root)
+
+
+@pytest.fixture
 def provider() -> Scripted:
     """Scripted by the test. With nothing queued it fails the request, which is what a test that
     forgot to script a turn deserves."""
@@ -104,6 +117,7 @@ def services(
     config: CodeConfig,
     database: Database,
     provider: Scripted,
+    workspace: Workspace,
 ) -> Services:
     """The application, assembled by hand rather than through `build_services`.
 
@@ -122,6 +136,7 @@ def services(
     return Services(
         settings=settings,
         config=config,
+        workspace=workspace,
         database=database,
         mind=mind,
         builder=builder,

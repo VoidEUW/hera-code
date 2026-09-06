@@ -33,6 +33,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from hera_code_workspace import Workspace
+
 PREAMBLE = """\
 You are working in a terminal, on a checkout of real code that a person is also editing.
 
@@ -92,6 +94,7 @@ class ProjectContext:
 def build(
     *,
     root: Path | None = None,
+    workspace: Workspace | None = None,
     instructions: str = "",
     todos: str = "",
     notes: str = "",
@@ -110,9 +113,14 @@ def build(
     last of the always-present sections because it is the thing that changes every turn and the
     thing a model should be looking at when it starts work.
     """
+    if workspace is None and root is not None:
+        # A bare root is still a working tree. Accepted so a caller that has only a path -- a
+        # test, or `-p` before discovery -- does not have to construct one.
+        workspace = Workspace(root=root)
+
     candidates = [
         Section("how-you-work", PREAMBLE),
-        Section("where-we-are", _where(root)),
+        Section("where-we-are", where(workspace)),
         Section("instructions", instructions),
         Section("what-the-index-knows", graph),
         Section("notes-you-have-kept", notes),
@@ -136,11 +144,25 @@ def build(
     return context
 
 
-def _where(root: Path | None) -> str:
-    """The working tree, as one line. Branch and dirty count arrive with M2."""
-    if root is None:
+def where(workspace: Workspace | None) -> str:
+    """The working tree, as one or two lines.
+
+    The branch and the dirty count are here because they change what a sensible next step is: an
+    agent about to make a sweeping change should know there are already twelve uncommitted files,
+    and one on `main` should know that too.
+    """
+    if workspace is None:
         return ""
-    return f"The working tree is {root}."
+    lines = [f"The working tree is {workspace.root}."]
+    if workspace.is_repository:
+        state = f"On branch {workspace.branch}" if workspace.branch else "In a git repository"
+        if workspace.dirty:
+            plural = "" if workspace.dirty == 1 else "s"
+            state += f", with {workspace.dirty} uncommitted change{plural}"
+        lines.append(state + ".")
+    else:
+        lines.append("It is not a git repository, so there is nothing to revert a change with.")
+    return "\n".join(lines)
 
 
 def sections_of(context: ProjectContext) -> Iterator[str]:

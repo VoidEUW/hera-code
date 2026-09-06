@@ -126,3 +126,40 @@ def test_an_unknown_verb_is_refused() -> None:
     with pytest.raises(SystemExit) as exit_:
         main(["dream"])
     assert exit_.value.code == 2
+
+
+def test_library_logging_does_not_reach_a_person(capsys: pytest.CaptureFixture[str]) -> None:
+    """**The gap the test suite had and manual use found.**
+
+    Alembic logs a line per autogenerate plugin at INFO, so the first thing anybody saw on a
+    fresh install was fourteen lines about `alembic.autogenerate.schemas` before
+    `created ~/.hera/mind`. pytest captures logging by default, so no test noticed — this one
+    asserts on the *streams*, which is where a person is actually looking.
+    """
+    main(["init"])
+
+    captured = capsys.readouterr()
+    for stream in (captured.out, captured.err):
+        assert "autogenerate" not in stream
+        assert "setup plugin" not in stream
+        assert "SQLiteImpl" not in stream
+
+
+def test_init_says_only_what_it_did(capsys: pytest.CaptureFixture[str]) -> None:
+    """Every line on stdout should be one somebody wanted to read."""
+    main(["init"])
+
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+
+    assert lines
+    assert all(line.startswith(("created", "migrated", "`<your repo>")) for line in lines), lines
+
+
+def test_verbose_puts_the_logging_back(capsys: pytest.CaptureFixture[str]) -> None:
+    """Quietened rather than disabled — somebody debugging a migration wants exactly those lines,
+    and a flag they can find is better than an environment variable they cannot."""
+    import logging
+
+    main(["--verbose", "init"])
+
+    assert logging.getLogger("alembic").level in {logging.NOTSET, logging.DEBUG}

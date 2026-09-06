@@ -30,8 +30,11 @@ from dataclasses import dataclass
 from hera_chats import ChatsSettings, TurnOrchestrator
 from hera_code.config import CodeConfig
 from hera_code.config import load as load_config
+from hera_code.files import WorkingTree
 from hera_code.settings import CodeSettings
-from hera_code_mcp import BUILTIN_SERVER_NAME
+from hera_code.shell import WorkingShell
+from hera_code_mcp import ASK_TOOL, BUILTIN_SERVER_NAME, build_server
+from hera_code_workspace import Workspace, discover
 from hera_home import mind_dir, skills_dir
 from hera_permissions import Decision, PermissionSet, Policy, Rule
 from hera_profiles import MindRepository, PromptBuilder
@@ -79,6 +82,25 @@ DEFAULT_POLICY = Policy(
                 decision=Decision.ALLOW,
                 reason="writes a note under .hera, never into your source",
             ),
+            # Spelled out rather than left to the fallback. The fallback would decide the same
+            # thing, and would decide it with no `reason` -- which is the field the permission
+            # card's third line renders and the one `--yes` prints. ADR 11 makes that field
+            # load-bearing twice, so the three calls a person sees most often each have one.
+            Rule(
+                pattern=f"{BUILTIN_SERVER_NAME}__write",
+                decision=Decision.ASK,
+                reason="replaces a file in your source",
+            ),
+            Rule(
+                pattern=f"{BUILTIN_SERVER_NAME}__edit",
+                decision=Decision.ASK,
+                reason="changes a file in your source",
+            ),
+            Rule(
+                pattern=f"{BUILTIN_SERVER_NAME}__bash",
+                decision=Decision.ASK,
+                reason="runs a command in your working tree",
+            ),
         ]
     ),
     fallback=Decision.ASK,
@@ -116,6 +138,7 @@ class Services:
 
     settings: CodeSettings
     config: CodeConfig
+    workspace: Workspace
     database: Database
     mind: MindRepository
     builder: PromptBuilder
@@ -139,6 +162,17 @@ class Services:
         """The model name requests are sent with."""
         return self.orchestrator.settings.model
 
+    def allow_what_would_be_asked(self) -> None:
+        """Apply `--yes` — see :func:`said_yes_in_advance` for the line it must not cross.
+
+        `with_policy` shares the servers rather than reconnecting them, so this costs nothing
+        even when a subprocess server is already running.
+        """
+        if self.registry is None:
+            return
+        self.registry = self.registry.with_policy(said_yes_in_advance(self.registry.policy))
+        self.orchestrator.registry = self.registry
+
     async def aclose(self) -> None:
         """Release everything holding a connection or a subprocess open."""
         if self.registry is not None:
@@ -156,6 +190,7 @@ def build_services(
     database: Database | None = None,
     registry: ToolRegistry | None = None,
     policy: Policy | None = None,
+    workspace: Workspace | None = None,
 ) -> Services:
     """Assemble the application.
 
@@ -181,19 +216,24 @@ def build_services(
     # just ranks worse than it eventually will.
     router = SkillRouter(library)
 
+    workspace = workspace if workspace is not None else discover()
     if registry is None:
-        # `builtin` is None until v0.1.0 M2 builds the server. The seam is here from the start so
-        # that mounting it is one argument rather than a restructure -- and so that a deployment
-        # with only foreign servers in mcp.json is a configuration this already supports.
         registry = ToolRegistry.open(
             policy=policy if policy is not None else DEFAULT_POLICY,
             settings=ToolsSettings(),
-            builtin=None,
+            # hera_code_mcp imports nothing of ours, so the working tree arrives as two ports.
+            # It is mounted under its own name -- `code` -- which travels on the server object
+            # rather than being written here as well.
+            builtin=build_server(
+                files=WorkingTree(workspace),
+                shell=WorkingShell(workspace),
+            ),
         )
 
     return Services(
         settings=settings,
         config=config,
+        workspace=workspace,
         database=database,
         mind=mind,
         builder=builder,
@@ -207,7 +247,15 @@ def build_services(
             builder=builder,
             router=router,
             registry=registry,
-            settings=ChatsSettings(model=provider_settings.model),
+            settings=ChatsSettings(
+                model=provider_settings.model,
+                # The one place the asking tool is named to the turn layer. `hera_chats` does not
+                # know what a hera-code tool is and must not learn; it takes the qualified name
+                # and suspends on it. Qualified here because `hera_tools` namespaces by server
+                # name, and that name travels on the server object rather than being written
+                # twice.
+                asking_tools=(f"{BUILTIN_SERVER_NAME}__{ASK_TOOL}",),
+            ),
         ),
     )
 
@@ -232,3 +280,27 @@ def _provider_for(settings: CodeSettings, config: CodeConfig) -> Provider:
     # second adapter is needed it is the field that selects one, and a config format that has to
     # grow a field later is one every existing install has to be migrated through.
     return OpenAICompatibleProvider(provider_settings, adapter_factory=QwenAdapter)
+
+
+def said_yes_in_advance(policy: Policy) -> Policy:
+    """The same policy with every **ask** turned into an allow, and every **deny** left alone.
+
+    What `--yes` does, and ADR 11 is explicit about the line it must not cross: a person saying
+    *yes in advance* is answering the cards they would have been shown. It is not switching off
+    the containment guard, which is an invariant rather than a preference — a flag that could
+    reach `deny` would make it one.
+
+    The `reason` travels with each flipped rule, because it is what the caller prints when it
+    says which calls it allowed. A CI log should show *what was permitted*, not only what ran.
+    """
+    return Policy(
+        base=PermissionSet(
+            rules=[
+                Rule(pattern=rule.pattern, decision=Decision.ALLOW, reason=rule.reason)
+                if rule.decision is Decision.ASK
+                else rule
+                for rule in policy.base.rules
+            ]
+        ),
+        fallback=(Decision.ALLOW if policy.fallback is Decision.ASK else policy.fallback),
+    )

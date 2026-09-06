@@ -16,6 +16,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **It can do work.** `hera_code_mcp` — the MCP server hera-code *is* — mounted in-process as
+  `code`: `read`, `write`, `edit`, `glob`, `grep`, `bash` and `ask`. Every path goes through one
+  containment guard, with symlinks resolved before they are compared.
+- `hera_code_workspace`: root discovery, branch and dirty count, `.gitignore`-aware walks, and the
+  `AGENT.md` / `AGENTS.md` / `CLAUDE.md` lookup — all three, read every turn, so a file edited
+  mid-session is followed by the next one.
+- The default permission policy, and `--yes`
+  ([ADR 11](docs/adr/0011-the-default-policy-and-what-ask-means-with-nobody-there.md)): reads run
+  without a card, changes ask, and anything outside the working tree is denied outright — which
+  `--yes` cannot reach, because containment is an invariant rather than a preference.
 - **A turn runs end to end.** `hera-code init` seeds the shared `~/.hera` (mind, skills,
   `mcp.json`) and hera-code's own `~/.hera/code`; `hera-code check` reports whether they are
   usable without changing anything; `hera-code -p "…"` sends one turn to a configured endpoint and
