@@ -85,13 +85,16 @@ jobs:
   terminal:
     name: terminal
     runs-on: ubuntu-latest
-    env:
-      # A temporary data directory, so nothing here can touch a real one -- and `HOME` on a runner
-      # is real enough to matter.
-      HERA_HOME: ${{ runner.temp }}/hera-home
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-python-workspace
+
+      # A temporary data directory, so nothing here can touch a real one -- `HOME` on a runner is
+      # real enough to matter. Set in a step rather than in the job's `env:`, because the `runner`
+      # context is not available there: a job-level `${{ runner.temp }}` fails the whole workflow
+      # at load time, with no jobs and no annotation saying why.
+      - name: Point HERA_HOME somewhere temporary
+        run: echo "HERA_HOME=$RUNNER_TEMP/hera-home" >> "$GITHUB_ENV"
 
       - name: The binary starts
         run: uv run hera-code --version
