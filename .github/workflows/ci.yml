@@ -71,31 +71,78 @@ jobs:
             echo "No packages in the workspace yet — coverage gate not applicable."
           fi
 
-  # The terminal is drawn into a pipe as often as it is drawn into a terminal, and an escape
-  # code in a pipe is the failure mode ADR 3 says this design is most exposed to. Guarded until
-  # `-p` exists in v0.1.0 M1, then it becomes the check that `hera-code -p "…" | cat` is plain
-  # text and that the dock never draws when stdout is not a TTY.
+  # The terminal is drawn into a pipe as often as it is drawn into a terminal, and an escape code
+  # in a pipe is the failure mode ADR 3 says this design is most exposed to.
+  #
+  # This job used to guard the pipe check behind "does `-p` work?", which was right while `-p` did
+  # not exist and became *silently vacuous* the moment it did: `-p` now exists and fails in CI for
+  # a different reason -- there is no model endpoint on a runner -- so the guard read that failure
+  # as "not built yet" and skipped the only check that mattered. A check that skips itself is
+  # worse than one that is absent, because the green tick says it ran.
+  #
+  # Nothing is guarded now. Every command below runs on a runner with no endpoint, no TTY and no
+  # `~/.hera`, which is precisely the environment the escape-code bug would hide in.
   terminal:
     name: terminal
     runs-on: ubuntu-latest
+    env:
+      # A temporary data directory, so nothing here can touch a real one -- and `HOME` on a runner
+      # is real enough to matter.
+      HERA_HOME: ${{ runner.temp }}/hera-home
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-python-workspace
+
       - name: The binary starts
         run: uv run hera-code --version
-      - id: guard
+
+      - name: init and check work on a machine that has never run it
         run: |
-          if uv run hera-code -p "hello" >/dev/null 2>&1; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "One-shot --print does not exist yet (v0.1.0 M1) — nothing to pipe."
+          uv run hera-code init
+          uv run hera-code check
+          test -f "$HERA_HOME/code/config.toml"
+          test -d "$HERA_HOME/mind"
+
+      - name: config.toml is not world-readable
+        # It holds an API key. Checked here as well as in the suite because the mode a file lands
+        # on disk with is a property of the filesystem, not of the code that asked for it.
+        run: |
+          mode=$(stat -c '%a' "$HERA_HOME/code/config.toml")
+          if [ "$mode" != "600" ]; then
+            echo "::error::config.toml is $mode and it holds an API key"
+            exit 1
           fi
-      - name: Non-TTY output is plain text
-        if: steps.guard.outputs.present == 'true'
+
+      - name: Nothing writes an escape code into a pipe
+        # Every command that produces output, piped. `-p` fails here because there is no endpoint,
+        # and that is fine: what is being checked is the *shape* of what reaches a pipe, and a
+        # failing turn still goes through the whole output path.
         run: |
-          uv run hera-code -p "say only: ok" | cat > out.txt
-          if grep -qP '\x1b\[' out.txt; then
+          {
+            uv run hera-code --version
+            uv run hera-code check
+            HERA_CODE_PROVIDER=fake uv run hera-code -p "hello" || true
+          } > out.txt 2> err.txt
+          if grep -qP '\x1b' out.txt err.txt; then
             echo "::error::escape codes reached a pipe — see ADR 3"
+            grep -nP '\x1b' out.txt err.txt | head
+            exit 1
+          fi
+
+      - name: A turn that cannot run says so and does not hang
+        # `4` is "suspended with nobody to answer" and `1` is "it failed"; both are answers. What
+        # must not happen is a hang, which is what a card drawn to nobody would be.
+        timeout-minutes: 2
+        run: |
+          set +e
+          HERA_CODE_PROVIDER=fake uv run hera-code -p "hello" > /dev/null 2> err.txt
+          code=$?
+          set -e
+          echo "exit $code"
+          test "$code" -ne 0
+          test -s err.txt
+          if grep -q "Traceback" err.txt; then
+            echo "::error::a person was shown a traceback"
+            cat err.txt
             exit 1
           fi
