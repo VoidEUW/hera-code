@@ -81,6 +81,11 @@ known-first-party = ["tools"]
 # Test models and fixtures legitimately use untyped and dynamic constructs.
 "**/tests/*" = ["ANN401"]
 "tests/*" = ["ANN401"]
+# The terminal draws the glyphs `docs/tui.md` specifies, and several of them are the "ambiguous"
+# unicode RUF001-003 exist to catch: `›` is the composer prompt, `┆` the gutter hairline, `◉` the
+# ocellus. They are the design rather than typos for `>` and `|`, and the one rule that would
+# genuinely matter here -- nothing else may use a ringed glyph -- is checked by a test instead.
+"apps/cli/src/hera_code/tui/*.py" = ["RUF001", "RUF002", "RUF003"]
 # ---------------------------------------------------------------------------
 # The block below belongs to the vendored packages and is copied from hera's root
 # pyproject.toml along with them. It is not ours to shorten: a vendored file is not edited

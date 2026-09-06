@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from hera_code import __version__
-from hera_code.cli import FAILED, NOT_YET, main
+from hera_code.cli import FAILED, main
 
 
 def test_version_is_read_from_packaging(capsys: pytest.CaptureFixture[str]) -> None:
@@ -87,13 +87,17 @@ def test_a_broken_config_is_one_line_not_a_traceback(
     assert str(code_config_path()) in err
 
 
-def test_the_terminal_says_which_milestone_it_is_waiting_on(
+def test_the_terminal_refuses_a_pipe_and_says_what_to_use(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A verb that exists and says *not yet* is a promise; one that does not is a surprise."""
-    assert main([]) == NOT_YET
+    """pytest's stdout is not a terminal, which is the case this guard is for.
+
+    A dock drawn into a pipe is the failure ADR 3 says this design is most exposed to, and there
+    is a better answer than a corrupted transcript: name the flag that works.
+    """
+    assert main([]) == 2
     err = capsys.readouterr().err
-    assert "v0.1.0 M3" in err
+    assert "needs a terminal" in err
     assert "-p" in err
 
 
