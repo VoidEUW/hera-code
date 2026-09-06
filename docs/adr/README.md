@@ -20,12 +20,17 @@ listed file that does not exist, or a gap in the numbering is a failing build.
 | [8](0008-the-todo-list-is-a-file-and-the-intake-is-a-conversation.md) | The todo list is a file, and the intake is a conversation | accepted |
 | [9](0009-a-shadow-note-is-delivered-with-its-file.md) | A shadow note is delivered with its file, never fetched | accepted |
 | [10](0010-navigation-before-reading.md) | Navigation before reading, and what keeping an index fresh costs | accepted |
+| [11](0011-the-default-policy-and-what-ask-means-with-nobody-there.md) | The default permission policy, and what `ask` means with nobody there | accepted |
 
 ## Read these first
 
 If you are changing **model-facing behaviour** — prompts, tools, what the agent is told it can
 do — read [2](0002-any-openai-compatible-endpoint.md), [4](0004-mcp-is-the-tool-layer.md) and
 [9](0009-a-shadow-note-is-delivered-with-its-file.md).
+
+If you are changing **what may run without asking**, read
+[11](0011-the-default-policy-and-what-ask-means-with-nobody-there.md) — including the part about
+why the absence of a person is not consent.
 
 If you are changing **the terminal**, read [3](0003-the-transcript-lives-in-scrollback.md) and
 then [`docs/tui.md`](../tui.md).

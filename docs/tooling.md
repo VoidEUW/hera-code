@@ -16,9 +16,9 @@ badly from. Each addition should be able to answer *what could it not do before?
 
 | Tool | Milestone | Notes |
 |---|---|---|
-| `read` · `write` · `edit` · `glob` · `grep` | v0.1.0 M2 | `edit` is find/replace, not a line-range patch — see § 3 |
-| `bash` | v0.1.0 M2 | `ask` by default, and the reason it is not `allow` is § 5 |
-| `ask` | v0.1.0 M2 | Suspends the turn. `hera_chats` already has the mechanism |
+| `read` · `write` · `edit` · `glob` · `grep` | ✅ v0.1.0 M2 | `edit` is find/replace, not a line-range patch — see § 3 |
+| `bash` | ✅ v0.1.0 M2 | `ask` by default, and the reason it is not `allow` is § 5 |
+| `ask` | ✅ v0.1.0 M2 | Suspends the turn. `hera_chats` already has the mechanism |
 | `todo_read` · `todo_write` · `todo_set` | v0.1.0 M4 | The list is a file; these are how the model edits it |
 | `note_write` · `note_read` · `sketch_write` · `thought_write` | v0.2.0 M2 | Reading a note is mostly automatic — ADR 9 |
 | `graph_outline` · `graph_find` · `graph_neighbours` · `graph_path` | v0.2.0 M3 | ADR 10 |
@@ -88,8 +88,10 @@ anything.
 
 ## 5. Where code runs — the one with two callers
 
-`bash` is `ask` by default and every invocation costs a card. That is the correct default and it
-is also the single biggest friction in daily use, and both of those are true at once.
+`bash` is `ask` by default and every invocation costs a card ([ADR 11](adr/0011-the-default-policy-and-what-ask-means-with-nobody-there.md)).
+That is the correct default and it is also the single biggest friction in daily use, and both of
+those are true at once. `--yes` is the escape hatch and is deliberately a *person saying yes in
+advance* rather than a way to switch the cards off — it cannot reach what is denied outright.
 
 The thing that would fix it is a sandbox: a `bash` that cannot reach outside the working tree and
 cannot reach the network is a `bash` that can be `allow`. hera has already written the record —
