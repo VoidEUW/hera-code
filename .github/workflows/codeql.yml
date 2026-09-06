@@ -23,11 +23,18 @@ jobs:
     name: analyze
     runs-on: ubuntu-latest
     permissions:
-      # Uploading results is what satisfies the ruleset; the other two are the documented
-      # minimum for the action and are not granted at the workflow level.
+      # Uploading results is what satisfies the ruleset; the rest are the documented minimum
+      # for the action and are not granted at the workflow level.
       security-events: write
       packages: read
       contents: read
+      # Only needed because this repository is **private**. The action reads the workflow run
+      # it is part of, and on a private repository that call is not covered by the default
+      # token scope -- it fails as `Resource not accessible by integration` at the upload step,
+      # after the analysis itself has already succeeded, which is a confusing place to land.
+      # hera does not need this line because hera is public; the difference is worth the
+      # comment rather than the next person diffing the two files and wondering.
+      actions: read
     strategy:
       fail-fast: false
       matrix:
