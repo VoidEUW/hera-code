@@ -16,6 +16,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **A turn runs end to end.** `hera-code init` seeds the shared `~/.hera` (mind, skills,
+  `mcp.json`) and hera-code's own `~/.hera/code`; `hera-code check` reports whether they are
+  usable without changing anything; `hera-code -p "…"` sends one turn to a configured endpoint and
+  prints the answer as plain text.
+- `~/.hera/code/config.toml`, written mode 600 because it holds an API key. Seeded once from
+  hera's own endpoints if it has any and from `HERA_PROVIDER_*` otherwise, and the file wins
+  afterwards.
+- A `coding` profile carrying the register as three behaviour traits, and the working tree
+  composed into `SLOT_PROJECT`. No mind region is written: the mind is shared with hera.
+- Alembic, owning the sessions schema at `~/.hera/code/sessions.sqlite3` — its own database
+  rather than a table in hera's, because a coding agent writes a turn every few seconds.
 - The repository: a uv workspace with nine of hera's packages vendored byte-identically
   (`packages/VENDOR.md`), six packages of hera-code's own, and the application at `apps/cli`.
 - `hera_code_home` — the paths under `~/.hera/code` and inside a working tree's `.hera`.
