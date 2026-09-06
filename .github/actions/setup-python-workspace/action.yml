@@ -1,0 +1,28 @@
+name: Set up the Python workspace
+description: Install uv with a warm cache and sync every workspace member.
+
+inputs:
+  python-version:
+    description: Python version to install
+    required: false
+    default: "3.12"
+
+runs:
+  using: composite
+  steps:
+    # Pinned to an exact version: setup-uv stopped publishing floating major tags after v7.
+    - uses: astral-sh/setup-uv@v10.0.1
+      with:
+        enable-cache: true
+        cache-dependency-glob: uv.lock
+    # Every later `uv run` has to agree with the interpreter we just synced against. Without
+    # this the checked-in .python-version wins, uv silently rebuilds the environment for that
+    # version instead, and re-syncs it *without* --all-packages -- so the workspace members
+    # vanish and the tests fail on an import of a dependency that was installed a step earlier.
+    - name: Pin the interpreter for the rest of the job
+      shell: bash
+      run: echo "UV_PYTHON=${{ inputs.python-version }}" >> "$GITHUB_ENV"
+
+    - name: Sync the workspace
+      shell: bash
+      run: uv sync --all-packages --python ${{ inputs.python-version }}

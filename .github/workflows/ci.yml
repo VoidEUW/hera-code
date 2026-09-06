@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-python-workspace
+      - run: uv run ruff check --output-format=github .
+      - run: uv run ruff format --check .
+      - name: Cache pre-commit environments
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Hooks
+        run: uv run pre-commit run --all-files --show-diff-on-failure
+
+  types:
+    name: types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-python-workspace
+      - run: uv run mypy
+
+  # The four meta-tests, in a job of their own rather than folded into `test`. They are the
+  # checks that stop this repository quietly becoming something else -- imports pointing the
+  # wrong way, a vendored package edited, an ADR nobody indexed -- and a failure in one of them
+  # means something different from a failing unit test. Naming the job is how that difference
+  # shows up in the checks list instead of in a scroll of pytest output.
+  structure:
+    name: structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-python-workspace
+      - name: Layering, workspace shape, docs, and the vendored copies
+        run: uv run pytest tests/ -v
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-python-workspace
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Unit tests
+        run: uv run coverage run -m pytest -m "not live"
+      - name: Coverage gate
+        run: |
+          if compgen -G "packages/*/pyproject.toml" > /dev/null; then
+            uv run coverage report
+          else
+            echo "No packages in the workspace yet — coverage gate not applicable."
+          fi
+
+  # The terminal is drawn into a pipe as often as it is drawn into a terminal, and an escape
+  # code in a pipe is the failure mode ADR 3 says this design is most exposed to. Guarded until
+  # `-p` exists in v0.1.0 M1, then it becomes the check that `hera-code -p "…" | cat` is plain
+  # text and that the dock never draws when stdout is not a TTY.
+  terminal:
+    name: terminal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-python-workspace
+      - name: The binary starts
+        run: uv run hera-code --version
+      - id: guard
+        run: |
+          if uv run hera-code -p "hello" >/dev/null 2>&1; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "One-shot --print does not exist yet (v0.1.0 M1) — nothing to pipe."
+          fi
+      - name: Non-TTY output is plain text
+        if: steps.guard.outputs.present == 'true'
+        run: |
+          uv run hera-code -p "say only: ok" | cat > out.txt
+          if grep -qP '\x1b\[' out.txt; then
+            echo "::error::escape codes reached a pipe — see ADR 3"
+            exit 1
+          fi

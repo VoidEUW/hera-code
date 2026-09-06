@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hera-code-home"
+version = "0.1.0"
+description = "Where hera-code keeps its data: ~/.hera/code, and the .hera directory inside a working tree."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Void" }]
+license = { text = "MIT" }
+keywords = ["paths", "agent", "configuration"]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dependencies = ["hera-home"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hera_code_home"]
+
+# Linting, typing, testing and coverage are configured once in the workspace root. This package
+# deliberately declares none of it, so there is only ever one answer to "which config applies".

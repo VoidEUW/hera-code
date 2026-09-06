@@ -1,0 +1,48 @@
+name: Feature request
+description: Something hera-code should be able to do
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before writing: `docs/tooling.md` lists several things that are missing **on purpose**,
+        with the reason. Worth a look — the absence may already have an argument attached.
+  - type: textarea
+    id: need
+    attributes:
+      label: The need
+      description: The situation you were in and what was missing. Not the solution yet.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How you imagine it
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Which package would own this
+      description: See ARCHITECTURE.md. "Not sure" is a fine answer.
+      options:
+        - hera_code_mcp (a new tool)
+        - hera_code_workspace
+        - hera_code_todos
+        - hera_code_shadow
+        - hera_code_graph
+        - apps/cli — the terminal
+        - apps/cli — wiring, config, boot
+        - one of hera's vendored packages (see ADR 1 — it goes upstream)
+        - not sure
+    validations:
+      required: true
+  - type: checkboxes
+    id: cost
+    attributes:
+      label: If this is a new tool
+      description: >
+        Every tool costs prompt tokens and a decision the model has to make well. A catalogue of
+        forty tools is one it chooses badly from.
+      options:
+        - label: I can say what the agent could not do before this

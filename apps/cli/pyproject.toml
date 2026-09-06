@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hera-code"
+version = "0.1.0.dev0"
+description = "A terminal coding agent: a working tree, a todo list you can read, and a graph instead of a grep."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Void" }]
+license = { text = "MIT" }
+keywords = ["agent", "cli", "tui", "mcp", "coding"]
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development",
+    "Typing :: Typed",
+]
+dependencies = [
+    "alembic>=1.13",
+    "hera-chats",
+    "hera-code-graph",
+    "hera-code-home",
+    "hera-code-mcp",
+    "hera-code-shadow",
+    "hera-code-todos",
+    "hera-code-workspace",
+    "hera-home",
+    "hera-permissions",
+    "hera-profiles",
+    "hera-prompts",
+    "hera-providers",
+    "hera-skillsets",
+    "hera-storage",
+    "hera-tools",
+    # The dock is anchored by prompt_toolkit and everything inside it is drawn by rich. See
+    # ADR 3 -- the transcript goes to the terminal's real scrollback, which is why there is no
+    # full-screen framework here.
+    "prompt-toolkit>=3.0.48",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.4.0",
+    "rich>=13.9",
+    # tomllib reads TOML; nothing in the standard library writes it, and hand-rolling the
+    # serialisation is exactly what breaks on a quote in an API key.
+    "tomli-w>=1.0",
+]
+
+[project.scripts]
+hera-code = "hera_code.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hera_code"]
+
+# Linting, typing, testing and coverage are configured once in the workspace root. This package
+# deliberately declares none of it, so there is only ever one answer to "which config applies".
