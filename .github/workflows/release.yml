@@ -1,0 +1,147 @@
+name: Release
+
+# Two tag shapes:
+#   v1.2.3                    the application -- five platform binaries and a checksum file
+#   hera-code-graph-v0.1.0    a single package, so another project can pin one library
+#
+# Only the vendored packages are *not* releasable from here: they are copies and their tags
+# belong to hera (packages/VENDOR.md, ADR 1). The check below refuses one.
+on:
+  push:
+    tags:
+      - "v*"
+      - "hera-code-*-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Read by the binaries job below, so it can tell an application tag from a package tag
+    # without re-deriving a regex a second place could disagree with.
+    outputs:
+      package: ${{ steps.target.outputs.package }}
+      version: ${{ steps.target.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Work out what is being released
+        id: target
+        run: |
+          if [[ "$GITHUB_REF_NAME" =~ ^(hera-code-[a-z0-9-]+)-v[0-9] ]]; then
+            package="${BASH_REMATCH[1]}"
+            echo "package=$package" >> "$GITHUB_OUTPUT"
+            echo "directory=packages/${package//-/_}" >> "$GITHUB_OUTPUT"
+            echo "version=${GITHUB_REF_NAME##*-v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "package=" >> "$GITHUB_OUTPUT"
+            # The application is `hera-code` at apps/cli, and its pyproject is what
+            # `hera_code.__version__` reads back out of the installed distribution -- so this
+            # is the file the tag has to agree with for `--version` to be telling the truth.
+            echo "directory=apps/cli" >> "$GITHUB_OUTPUT"
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A vendored copy's version belongs to hera. Tagging one here would publish a wheel
+      # claiming to be hera's package, built from a copy nobody upstream agreed to.
+      - name: Refuse to release a vendored package
+        run: |
+          directory='${{ steps.target.outputs.directory }}'
+          if [ -n '${{ steps.target.outputs.package }}' ] && \
+             grep -q "^| \`$(basename "$directory")\` |" packages/VENDOR.md; then
+            echo "::error::$(basename "$directory") is vendored from hera — its tags are hera's. See ADR 1."
+            exit 1
+          fi
+
+      # Every tag, the application's included. The version is declared in exactly one file per
+      # thing that can be released and read back from packaging at runtime, so this is the only
+      # place the two could drift apart -- and it is a release that fails rather than a
+      # `--version` quietly reporting the release before it.
+      - name: Check the tag matches the declared version
+        run: |
+          directory='${{ steps.target.outputs.directory }}'
+          declared=$(grep -m1 '^version = ' "$directory/pyproject.toml" | cut -d'"' -f2)
+          tagged='${{ steps.target.outputs.version }}'
+          if [ "$declared" != "$tagged" ]; then
+            echo "::error::$directory/pyproject.toml declares $declared but the tag says $tagged"
+            exit 1
+          fi
+
+      - uses: ./.github/actions/setup-python-workspace
+        if: steps.target.outputs.package != ''
+
+      - name: Build the package
+        if: steps.target.outputs.package != ''
+        run: uv build --package '${{ steps.target.outputs.package }}' --out-dir dist
+
+      - name: Collect the changes since the previous tag
+        id: notes
+        run: |
+          pattern='v[0-9]*'
+          if [ -n '${{ steps.target.outputs.package }}' ]; then
+            pattern='${{ steps.target.outputs.package }}-v[0-9]*'
+          fi
+          previous=$(git describe --tags --abbrev=0 --match "$pattern" "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          if [ -n "$previous" ]; then
+            range="$previous..${GITHUB_REF_NAME}"
+          else
+            range="${GITHUB_REF_NAME}"
+          fi
+          {
+            echo "body<<HERA_EOF"
+            git log --no-merges --pretty='- %s (%h)' "$range" -- '${{ steps.target.outputs.directory }}'
+            echo "HERA_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # Created as a draft for an application tag: the binaries job attaches to it afterwards,
+      # and a release that is visible for the two minutes it has no binaries in it is one
+      # somebody downloads nothing from and reports as broken.
+      - uses: softprops/action-gh-release@v3
+        with:
+          name: ${{ github.ref_name }}
+          body: ${{ steps.notes.outputs.body }}
+          files: ${{ steps.target.outputs.package != '' && 'dist/*' || '' }}
+          draft: ${{ steps.target.outputs.package == '' }}
+          generate_release_notes: false
+
+  # ---------------------------------------------------------------------------------------
+  # v0.1.0 M6. Only for the application tag -- a package tag releases a wheel, and PyInstaller
+  # has nothing to build from one. Depends on `release` rather than duplicating its tag
+  # parsing, so there is exactly one place that decides what a tag means.
+  #
+  # A tag that fails to build on one platform fails the whole release rather than shipping
+  # four: `fail-fast: false` so every platform reports, and the publish step below needs all
+  # of them. A partial release is worse than a late one, because the person who gets the
+  # missing platform cannot tell it from a network problem.
+  # ---------------------------------------------------------------------------------------
+  binaries:
+    name: binaries (${{ matrix.target }})
+    needs: release
+    if: needs.release.outputs.package == ''
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: macos-arm64
+            os: macos-latest
+          - target: macos-x86_64
+            os: macos-13
+          - target: linux-x86_64
+            os: ubuntu-latest
+          - target: linux-arm64
+            os: ubuntu-24.04-arm
+          - target: windows-x86_64
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-python-workspace
+
+      - name: Not built yet
+        run: |
+          echo "PyInstaller packaging lands in v0.1.0 M6 — see docs/versions/v0.1.0.md."
+          echo "Until then an application tag produces a draft release with no binaries."
+          exit 1

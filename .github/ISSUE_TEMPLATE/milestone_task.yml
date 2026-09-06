@@ -1,0 +1,46 @@
+name: Milestone task
+description: One piece of work inside a version milestone
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Milestones are the plan ([ADR 6](../blob/main/docs/adr/0006-github-flow-and-milestones-are-the-plan.md)).
+        A version document says what a version is *for* and is frozen when its tag is cut; this
+        issue is what stays current, so if the two disagree, this one is right.
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      placeholder: v0.1.0 M3 — the working tree
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What is true when this is done
+      description: >
+        An outcome, not a task list. "grep and glob work against the working tree and refuse
+        paths outside it" — not "implement grep".
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: How it will be verified
+      description: The test that will exist, or the command that will be run.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Decisions and constraints
+      description: >
+        Anything already settled that whoever picks this up should not re-litigate, with a link
+        to the ADR. If it needs a decision that has not been made, say so here — that is what
+        blocks it.
+  - type: input
+    id: blocked
+    attributes:
+      label: Blocked by
+      placeholder: "#12"

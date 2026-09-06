@@ -1,0 +1,54 @@
+name: Bug report
+description: Something behaves differently than it should
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - the terminal (drawing, the dock, keys, colour)
+        - the turn loop (tools looping, a turn that will not close)
+        - tools / MCP
+        - the todo list
+        - the shadow tree, sketches or thoughts
+        - the code graph
+        - the working tree (paths, instruction files, permissions)
+        - skills
+        - install, packaging, the binary
+        - not sure
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model and endpoint
+      placeholder: Qwen3.6-35B via LM Studio 0.3.x
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal and OS
+      description: Only for a drawing bug — and say whether NO_COLOR was set.
+      placeholder: Ghostty 1.x, macOS 26, dark, 120 columns
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output
+      description: Redact anything private. Paste it rather than screenshotting it.
+      render: shell

@@ -1,0 +1,192 @@
+[project]
+name = "hera-code-workspace-root"
+version = "0.0.0"
+description = "hera-code — a terminal coding agent built on hera's packages."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Void" }]
+license = { text = "MIT" }
+dependencies = []
+
+# The workspace root is a container, not a distribution: nothing installs it.
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*", "apps/cli"]
+
+# Every member another member depends on needs an entry here, or `uv sync` fails with
+# "included as a workspace member, but is missing an entry in tool.uv.sources".
+# tests/test_workspace.py checks the list stays complete.
+#
+# The nine `hera-*` entries that are not `hera-code-*` are **vendored copies** of hera's
+# packages -- see packages/VENDOR.md and ADR 1. When hera publishes tags, each becomes a
+# `{ git = ..., subdirectory = ..., tag = ... }` source and nothing else changes.
+[tool.uv.sources]
+hera-chats = { workspace = true }
+hera-code = { workspace = true }
+hera-code-graph = { workspace = true }
+hera-code-home = { workspace = true }
+hera-code-mcp = { workspace = true }
+hera-code-shadow = { workspace = true }
+hera-code-todos = { workspace = true }
+hera-code-workspace = { workspace = true }
+hera-home = { workspace = true }
+hera-permissions = { workspace = true }
+hera-profiles = { workspace = true }
+hera-prompts = { workspace = true }
+hera-providers = { workspace = true }
+hera-skillsets = { workspace = true }
+hera-storage = { workspace = true }
+hera-tools = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "coverage>=7.16.0",
+    "mypy>=1.11",
+    "ruff>=0.16.5",
+    "httpx>=0.27",
+    # Needed at the workspace root for the pydantic mypy plugin to load.
+    "pydantic>=2.13.5",
+    "pre-commit>=4.6.2",
+    # hera_skillsets parses SKILL.md frontmatter; mypy --strict needs the stubs.
+    "types-PyYAML>=6.0",
+    # Serves a real MCP server over HTTP in the hera_tools transport tests. It arrives with
+    # the MCP SDK anyway; declared here so the suite does not depend on that staying true.
+    "uvicorn>=0.30",
+]
+
+# ---------------------------------------------------------------------------
+# Shared tool configuration. Every package inherits this; a package only adds a
+# `[tool.ruff.lint.per-file-ignores]` entry when it has a documented reason to.
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+src = ["packages", "apps/cli/src", "tests", "tools"]
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "RUF"]
+
+# `tools/` sits at the repository root rather than under a src layout, so isort cannot infer it.
+# Without this it is sorted in with third-party imports, and `tests/test_vendor.py` -- the only
+# thing that imports it -- ends up with pytest and our own module in one block.
+[tool.ruff.lint.isort]
+known-first-party = ["tools"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test models and fixtures legitimately use untyped and dynamic constructs.
+"**/tests/*" = ["ANN401"]
+"tests/*" = ["ANN401"]
+# ---------------------------------------------------------------------------
+# The block below belongs to the vendored packages and is copied from hera's root
+# pyproject.toml along with them. It is not ours to shorten: a vendored file is not edited
+# (packages/VENDOR.md), so the ignores it needs travel with it.
+# ---------------------------------------------------------------------------
+# These two implement signatures that are a fixed contract for everything built on top: an
+# explicit TypeVar instead of PEP 695 type parameters (UP046/UP047), and `Any` for SQLAlchemy
+# filter expressions and **changes (ANN401).
+"packages/hera_storage/src/hera_storage/repository.py" = ["UP046", "ANN401"]
+"packages/hera_storage/src/hera_storage/versioning.py" = ["UP047", "ANN401"]
+# Canonical JSON encoding accepts whatever pydantic dumped. Spelling that as a recursive
+# JSON alias buys no safety -- the input is already `model_dump(mode="json")` output -- and
+# costs a cast at every call site (ANN401).
+"packages/hera_prompts/src/hera_prompts/canonical.py" = ["ANN401"]
+# `**updates` is forwarded straight into `model_dump()` and back through validation, so the
+# field types live on the models rather than on these two helpers (ANN401).
+"packages/hera_prompts/src/hera_prompts/prompt.py" = ["ANN401"]
+# This one reads a JSON document someone else wrote. `json.loads` produces `Any` by
+# definition, and the whole job of the module is narrowing that into typed models -- the
+# helpers doing the narrowing have to accept it (ANN401).
+"packages/hera_tools/src/hera_tools/config.py" = ["ANN401"]
+# Alembic revisions are generated. The template imports the column types autogenerate may write
+# out fully qualified, and any one revision uses only some of them; editing each to satisfy the
+# linter is a chore that would eventually be done by deleting an import the next one needs.
+"apps/cli/src/hera_code/migrations/versions/*.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+# Listed explicitly, one entry per workspace member: mypy treats a glob that matches nothing as
+# a literal path, so `packages/*` cannot be used while a member is still missing.
+# tests/test_docs.py::test_mypy_checks_every_package fails if an entry is forgotten.
+files = [
+    "tests",
+    "tools",
+    "apps/cli/src",
+    "apps/cli/tests",
+    "packages/hera_chats/src",
+    "packages/hera_chats/tests",
+    "packages/hera_code_graph/src",
+    "packages/hera_code_graph/tests",
+    "packages/hera_code_home/src",
+    "packages/hera_code_home/tests",
+    "packages/hera_code_mcp/src",
+    "packages/hera_code_mcp/tests",
+    "packages/hera_code_shadow/src",
+    "packages/hera_code_shadow/tests",
+    "packages/hera_code_todos/src",
+    "packages/hera_code_todos/tests",
+    "packages/hera_code_workspace/src",
+    "packages/hera_code_workspace/tests",
+    "packages/hera_home/src",
+    "packages/hera_home/tests",
+    "packages/hera_permissions/src",
+    "packages/hera_permissions/tests",
+    "packages/hera_profiles/src",
+    "packages/hera_profiles/tests",
+    "packages/hera_prompts/src",
+    "packages/hera_prompts/tests",
+    "packages/hera_providers/src",
+    "packages/hera_providers/tests",
+    "packages/hera_skillsets/src",
+    "packages/hera_skillsets/tests",
+    "packages/hera_storage/src",
+    "packages/hera_storage/tests",
+    "packages/hera_tools/src",
+    "packages/hera_tools/tests",
+]
+
+# Every conftest.py resolves to the same module name -- mypy derives it from the file name, and
+# pytest requires that name. pytest itself is fine because it loads conftest by path; mypy has
+# no equivalent, and given several it picks one and then cannot find the others' fixtures.
+# Excluding them all is the narrowest fix available: ruff still lints them under the full rule
+# set including ANN, and a fixture that does not type-check shows up as a failure in every test
+# that uses it.
+exclude = ["(^|/)conftest\\.py$"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "*.tests.*"]
+disallow_untyped_decorators = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "packages", "apps/cli/tests"]
+asyncio_mode = "auto"
+addopts = "--strict-markers --strict-config"
+markers = [
+    "live: needs a reachable model endpoint; never runs in CI",
+]
+
+# Coverage runs as `coverage run -m pytest`, not through --cov: hera_storage ships a pytest11
+# plugin, so pytest imports it while loading entry points -- before pytest-cov could start
+# tracing. Everything at module level would count as unmeasured.
+[tool.coverage.run]
+source = ["packages", "apps/cli/src"]
+omit = ["*/tests/*"]
+branch = true
+relative_files = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "@overload",
+    "raise NotImplementedError",
+    "class .*\\(Protocol\\):",
+]
