@@ -18,6 +18,7 @@ from hera_code_workspace import (
     Workspace,
     discover,
     git_root,
+    matches_glob,
 )
 
 
@@ -253,3 +254,45 @@ def test_a_detached_head_shows_the_commit(tmp_path: Path) -> None:
     )
 
     assert discover(root).branch == commit
+
+
+# -- what a glob means ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("path", "pattern", "expected"),
+    [
+        ("api.py", "*.py", True),
+        ("src/api.py", "*.py", True),
+        ("src/deep/api.py", "*.py", True),
+        ("src/api.py", "src/*.py", True),
+        ("src/deep/api.py", "src/*.py", False),
+        ("src/deep/api.py", "src/**/*.py", True),
+        ("src/app.py", "*app.py", True),
+        ("src/api.py", "*app.py", False),
+        ("README.md", "*.py", False),
+        ("test_api.py", "test_*.py", True),
+        ("src/test_api.py", "test_*.py", True),
+    ],
+)
+def test_what_a_glob_means(path: str, pattern: str, expected: bool) -> None:
+    """**One definition, pinned, because it silently had two.**
+
+    `Path.match` and `Path.full_match` disagree — the first matches a basename anywhere in the
+    tree, the second requires the whole path and will not let `*` cross a `/` — and `full_match`
+    only exists from 3.13. A build that used one with the other as a fallback changed what a glob
+    meant depending on the interpreter. It did, and CI caught it on 3.13 after it passed on 3.12.
+
+    So the behaviour is written down here rather than inherited from whichever `pathlib` is
+    installed.
+    """
+    assert matches_glob(path, pattern) is expected
+
+
+def test_a_glob_matches_the_basename_anywhere() -> None:
+    """`*.py` finds `src/deep/api.py`, which is what somebody typing it means.
+
+    The strict reading would need `**/*.py`, and a tool that made you spell that out would be
+    right and unhelpful.
+    """
+    assert matches_glob("src/deep/api.py", "*.py")

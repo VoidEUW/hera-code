@@ -18,7 +18,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from hera_code_mcp import FileText, Match
-from hera_code_workspace import OutsideWorkspace, Workspace
+from hera_code_workspace import OutsideWorkspace, Workspace, matches_glob
 
 MAX_READ_BYTES = 5_000_000
 """A file bigger than this is refused rather than read.
@@ -130,7 +130,7 @@ class WorkingTree:
         found = [
             path
             for path in self._workspace.walk(ignored=self._ignored)
-            if path.relative_to(root).match(pattern) or _globs(path.relative_to(root), pattern)
+            if matches_glob(path.relative_to(root), pattern)
         ]
         # Newest first: the question behind a glob is almost always *what is being worked on*,
         # and alphabetical order answers a different one.
@@ -159,7 +159,7 @@ class WorkingTree:
             if within != root and within not in candidate.parents:
                 continue
             relative = candidate.relative_to(root)
-            if glob and not _globs(relative, glob):
+            if glob and not matches_glob(relative, glob):
                 continue
             matches.extend(_search(candidate, relative, expression))
             if limit > 0 and len(matches) >= limit:
@@ -178,21 +178,6 @@ class WorkingTree:
             return self._workspace.resolve(path)
         except OutsideWorkspace:
             raise
-
-
-def _globs(relative: Path, pattern: str) -> bool:
-    """Whether one relative path matches a glob, `**` included.
-
-    `Path.match` does not handle a leading `**/` the way a person expects, so `full_match` is used
-    where it exists and the plain match is the fallback.
-    """
-    # `full_match` is 3.13+; it is the one that handles a leading `**/` the way a person writing
-    # `**/test_*.py` expects. On 3.12 the fallback is `match` plus a prefix check, which gets the
-    # common cases and is honestly worse -- both interpreters are supported, so both are here.
-    full_match = getattr(relative, "full_match", None)
-    if full_match is not None:
-        return bool(full_match(pattern))
-    return bool(relative.match(pattern)) or relative.as_posix().startswith(pattern.rstrip("*"))
 
 
 def _search(path: Path, relative: Path, expression: re.Pattern[str]) -> list[Match]:

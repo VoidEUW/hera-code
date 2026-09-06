@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import fnmatch
+import re
 import subprocess
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from hera_code_workspace.errors import OutsideWorkspace
@@ -143,6 +144,69 @@ def _walk(directory: Path, root: Path, ignored: tuple[str, ...]) -> Iterator[Pat
             yield entry
 
 
+def matches_glob(relative: str | Path, pattern: str) -> bool:
+    """Whether one path, relative to the root, matches a glob.
+
+    **The one definition of what a glob means in hera-code**, used by `walk`'s ignore patterns and
+    by the `glob` and `grep` tools. One place, for the same reason there is one containment check:
+    a pattern that meant different things in two callers is a pattern nobody can reason about.
+
+    Translated to a regular expression here rather than handed to `fnmatch`, `Path.match` or
+    `Path.full_match`, because none of the three does what a person means:
+
+    * `Path.match` matches a basename anywhere in the tree; `full_match` requires the whole path
+      and will not let `*` cross a `/`. They disagree, and `full_match` only exists from 3.13 — a
+      build that used one with the other as a fallback silently changed what a glob meant
+      depending on the interpreter. It did, and CI caught it on 3.13 after it passed on 3.12.
+    * `fnmatch` lets `*` cross `/`, so `src/*.py` would match `src/deep/api.py` — which is not
+      what somebody narrowing a search to one directory means.
+
+    The rules, and they are the ordinary ones:
+
+    ==================  ====================================================
+    ``*``               anything except a ``/``
+    ``**``              anything, ``/`` included
+    ``?``               one character except a ``/``
+    no ``/`` at all     also matched against the basename, so ``*.py`` finds
+                        ``src/deep/api.py``
+    ==================  ====================================================
+    """
+    text = Path(relative).as_posix()
+    expression = _compiled(pattern)
+    if expression.match(text):
+        return True
+    # A pattern with no separator in it is about a *name*, so it is tried against the basename as
+    # well: `*.py` finding only top-level files would be right and unhelpful. A pattern that does
+    # name a directory is anchored, because that is the point of naming one.
+    return "/" not in pattern and bool(expression.match(text.rsplit("/", 1)[-1]))
+
+
+@lru_cache(maxsize=512)
+def _compiled(pattern: str) -> re.Pattern[str]:
+    """One glob as a regular expression. Cached, because `walk` asks per file per pattern."""
+    out = []
+    index = 0
+    while index < len(pattern):
+        char = pattern[index]
+        if pattern.startswith("**/", index):
+            # `**/` matches zero or more directories, so `src/**/*.py` finds `src/api.py` too.
+            out.append("(?:[^/]+/)*")
+            index += 3
+        elif pattern.startswith("**", index):
+            out.append(".*")
+            index += 2
+        elif char == "*":
+            out.append("[^/]*")
+            index += 1
+        elif char == "?":
+            out.append("[^/]")
+            index += 1
+        else:
+            out.append(re.escape(char))
+            index += 1
+    return re.compile("".join(out) + r"\Z")
+
+
 def _matches(relative: str, patterns: tuple[str, ...]) -> bool:
     """Whether one relative path matches any pattern.
 
@@ -151,12 +215,7 @@ def _matches(relative: str, patterns: tuple[str, ...]) -> bool:
     having it: a half-right ignore file hides a file the person can see. What this does is plain
     globbing, and the caller says what patterns to pass.
     """
-    if not patterns:
-        return False
-    name = relative.rsplit("/", 1)[-1]
-    return any(
-        fnmatch.fnmatch(relative, pattern) or fnmatch.fnmatch(name, pattern) for pattern in patterns
-    )
+    return any(matches_glob(relative, pattern) for pattern in patterns)
 
 
 def git_root(start: Path) -> Path | None:

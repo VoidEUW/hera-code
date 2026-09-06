@@ -30,6 +30,7 @@ from hera_code_workspace.tree import (
     Workspace,
     discover,
     git_root,
+    matches_glob,
 )
 
 __all__ = [
@@ -43,4 +44,5 @@ __all__ = [
     "discover",
     "git_root",
     "instructions",
+    "matches_glob",
 ]
